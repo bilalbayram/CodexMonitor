@@ -13,7 +13,7 @@ export function useWorkspaceFiles({
 }: UseWorkspaceFilesOptions) {
   const [files, setFiles] = useState<string[]>([]);
   const lastFetchedWorkspaceId = useRef<string | null>(null);
-  const inFlight = useRef(false);
+  const inFlight = useRef<string | null>(null);
 
   const REFRESH_INTERVAL_MS = 5000;
   const workspaceId = activeWorkspace?.id ?? null;
@@ -23,19 +23,20 @@ export function useWorkspaceFiles({
     if (!workspaceId || !isConnected) {
       return;
     }
-    if (inFlight.current) {
+    if (inFlight.current === workspaceId) {
       return;
     }
-    inFlight.current = true;
+    inFlight.current = workspaceId;
+    const requestWorkspaceId = workspaceId;
     onDebug?.({
       id: `${Date.now()}-client-files-list`,
       timestamp: Date.now(),
       source: "client",
       label: "files/list",
-      payload: { workspaceId },
+      payload: { workspaceId: requestWorkspaceId },
     });
     try {
-      const response = await getWorkspaceFiles(workspaceId);
+      const response = await getWorkspaceFiles(requestWorkspaceId);
       onDebug?.({
         id: `${Date.now()}-server-files-list`,
         timestamp: Date.now(),
@@ -43,8 +44,10 @@ export function useWorkspaceFiles({
         label: "files/list response",
         payload: response,
       });
-      setFiles(Array.isArray(response) ? response : []);
-      lastFetchedWorkspaceId.current = workspaceId;
+      if (requestWorkspaceId === workspaceId) {
+        setFiles(Array.isArray(response) ? response : []);
+        lastFetchedWorkspaceId.current = requestWorkspaceId;
+      }
     } catch (error) {
       onDebug?.({
         id: `${Date.now()}-client-files-list-error`,
@@ -54,9 +57,17 @@ export function useWorkspaceFiles({
         payload: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      inFlight.current = false;
+      if (inFlight.current === requestWorkspaceId) {
+        inFlight.current = null;
+      }
     }
   }, [isConnected, onDebug, workspaceId]);
+
+  useEffect(() => {
+    setFiles([]);
+    lastFetchedWorkspaceId.current = null;
+    inFlight.current = null;
+  }, [workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || !isConnected) {
