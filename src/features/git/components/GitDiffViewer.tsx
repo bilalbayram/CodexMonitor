@@ -1,13 +1,10 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { FileDiff, WorkerPoolContextProvider } from "@pierre/diffs/react";
 import type {
   FileDiffMetadata,
   Hunk,
-  SelectedLineRange,
-  AnnotationSide,
 } from "@pierre/diffs";
 import { parsePatchFiles } from "@pierre/diffs";
-import type { DiffLineReference } from "../../../types";
 import { workerFactory } from "../../../utils/diffsWorker";
 
 type GitDiffViewerItem = {
@@ -21,17 +18,7 @@ type GitDiffViewerProps = {
   selectedPath: string | null;
   isLoading: boolean;
   error: string | null;
-  onLineReference?: (reference: DiffLineReference) => void;
   onActivePathChange?: (path: string) => void;
-};
-
-type SelectedRange = {
-  path: string;
-  start: number;
-  end: number;
-  anchor: number;
-  side?: AnnotationSide;
-  endSide?: AnnotationSide;
 };
 
 type LineMaps = {
@@ -93,90 +80,24 @@ function buildLineMaps(hunks: Hunk[]): LineMaps {
   return { oldLines, newLines };
 }
 
-function selectionTypeFromSide(side?: AnnotationSide, endSide?: AnnotationSide) {
-  if (side && endSide && side !== endSide) {
-    return "mixed";
-  }
-  if (side === "additions" || endSide === "additions") {
-    return "add";
-  }
-  if (side === "deletions" || endSide === "deletions") {
-    return "del";
-  }
-  return "context";
-}
-
-function collectSelectedLines(
-  range: SelectedLineRange,
-  lineMaps: LineMaps,
-) {
-  const start = Math.min(range.start, range.end);
-  const end = Math.max(range.start, range.end);
-  const useNew = range.side === "additions" || range.endSide === "additions";
-  const useOld = range.side === "deletions" || range.endSide === "deletions";
-  const lines: string[] = [];
-  for (let lineNumber = start; lineNumber <= end; lineNumber += 1) {
-    const line = useNew
-      ? lineMaps.newLines.get(lineNumber)
-      : useOld
-        ? lineMaps.oldLines.get(lineNumber)
-        : lineMaps.newLines.get(lineNumber) ?? lineMaps.oldLines.get(lineNumber);
-    if (line !== undefined) {
-      lines.push(line);
-    }
-  }
-  return lines;
-}
-
-function selectionLineNumbers(range: SelectedLineRange) {
-  const start = Math.min(range.start, range.end);
-  const end = Math.max(range.start, range.end);
-  if (range.side === "deletions" || range.endSide === "deletions") {
-    return { oldLine: start, endOldLine: end, newLine: null, endNewLine: null };
-  }
-  if (range.side === "additions" || range.endSide === "additions") {
-    return { newLine: start, endNewLine: end, oldLine: null, endOldLine: null };
-  }
-  return { newLine: start, endNewLine: end, oldLine: null, endOldLine: null };
-}
-
 type DiffCardProps = {
   entry: ParsedDiffEntry;
   isSelected: boolean;
-  selectedRange: SelectedRange | null;
-  onLineSelectionEnd: (entry: ParsedDiffEntry, range: SelectedLineRange | null) => void;
 };
 
 const DiffCard = memo(function DiffCard({
   entry,
   isSelected,
-  selectedRange,
-  onLineSelectionEnd,
 }: DiffCardProps) {
-  const selectedLines = useMemo(
-    () =>
-      selectedRange
-        ? {
-            start: selectedRange.start,
-            end: selectedRange.end,
-            side: selectedRange.side,
-            endSide: selectedRange.endSide,
-          }
-        : undefined,
-    [selectedRange],
-  );
   const diffOptions = useMemo(
     () => ({
       diffStyle: "split" as const,
       hunkSeparators: "line-info" as const,
-      enableLineSelection: true,
       overflow: "scroll" as const,
       unsafeCSS: DIFF_SCROLL_CSS,
-      onLineSelectionEnd: (range: SelectedLineRange | null) =>
-        onLineSelectionEnd(entry, range),
       disableFileHeader: true,
     }),
-    [entry, onLineSelectionEnd],
+    [],
   );
 
   return (
@@ -192,7 +113,6 @@ const DiffCard = memo(function DiffCard({
         <div className="diff-viewer-output">
           <FileDiff
             fileDiff={entry.fileDiff}
-            selectedLines={selectedLines}
             options={diffOptions}
             className="diff-viewer-diffs"
             style={{ width: "100%", maxWidth: "100%", minWidth: 0 }}
@@ -210,10 +130,9 @@ export function GitDiffViewer({
   selectedPath,
   isLoading,
   error,
-  onLineReference,
 }: GitDiffViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedRange, setSelectedRange] = useState<SelectedRange | null>(null);
+  const lastScrolledPathRef = useRef<string | null>(null);
   const poolOptions = useMemo(() => ({ workerFactory }), []);
   const highlighterOptions = useMemo(
     () => ({ theme: { dark: "pierre-dark", light: "pierre-light" } }),
@@ -246,17 +165,10 @@ export function GitDiffViewer({
   );
 
   useEffect(() => {
-    if (!selectedRange) {
+    if (!selectedPath) {
       return;
     }
-    const stillExists = diffs.some((entry) => entry.path === selectedRange.path);
-    if (!stillExists) {
-      setSelectedRange(null);
-    }
-  }, [diffs, selectedRange]);
-
-  useEffect(() => {
-    if (!selectedPath) {
+    if (lastScrolledPathRef.current === selectedPath) {
       return;
     }
     const container = containerRef.current;
@@ -282,40 +194,8 @@ export function GitDiffViewer({
     if (!isVisible) {
       target.scrollIntoView({ block: "start" });
     }
+    lastScrolledPathRef.current = selectedPath;
   }, [selectedPath, parsedDiffs]);
-
-  const handleSelectionEnd = useCallback(
-    (entry: ParsedDiffEntry, range: SelectedLineRange | null) => {
-      if (!range || !entry.lineMaps) {
-        return;
-      }
-      const start = Math.min(range.start, range.end);
-      const end = Math.max(range.start, range.end);
-      setSelectedRange({
-        path: entry.path,
-        start,
-        end,
-        anchor: start,
-        side: range.side,
-        endSide: range.endSide,
-      });
-      const lines = collectSelectedLines(range, entry.lineMaps);
-      if (!lines.length) {
-        return;
-      }
-      const { oldLine, endOldLine, newLine, endNewLine } = selectionLineNumbers(range);
-      onLineReference?.({
-        path: entry.path,
-        type: selectionTypeFromSide(range.side, range.endSide),
-        oldLine,
-        newLine,
-        endOldLine,
-        endNewLine,
-        lines,
-      });
-    },
-    [onLineReference],
-  );
 
   return (
     <WorkerPoolContextProvider
@@ -330,22 +210,14 @@ export function GitDiffViewer({
         {!error && !isLoading && !diffs.length && (
           <div className="diff-viewer-empty">No changes detected.</div>
         )}
-        {!error && parsedDiffs.length > 0 && (
-          parsedDiffs.map((entry) => {
-            const isSelected = entry.path === selectedPath;
-            const selectedRangeForEntry =
-              selectedRange?.path === entry.path ? selectedRange : null;
-            return (
-              <DiffCard
-                key={entry.path}
-                entry={entry}
-                isSelected={isSelected}
-                selectedRange={selectedRangeForEntry}
-                onLineSelectionEnd={handleSelectionEnd}
-              />
-            );
-          })
-        )}
+        {!error && parsedDiffs.length > 0 &&
+          parsedDiffs.map((entry) => (
+            <DiffCard
+              key={entry.path}
+              entry={entry}
+              isSelected={entry.path === selectedPath}
+            />
+          ))}
       </div>
     </WorkerPoolContextProvider>
   );
