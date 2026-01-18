@@ -1,19 +1,19 @@
 .diff-viewer {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
   overflow-y: auto;
   position: relative;
   padding: 12px 0 16px;
   flex: 1;
   min-height: 0;
   min-width: 0;
-  background: var(--surface-messages);
+  background: color-mix(in srgb, var(--surface-messages) 92%, #000);
 }
 
 .main .diff-viewer {
-  margin-top: calc(-1 * var(--main-topbar-height));
-  padding-top: calc(12px + var(--main-topbar-height));
+  margin-top: 0;
+  padding-top: 0;
 }
 
 .diff-viewer-list {
@@ -33,13 +33,15 @@
   border-radius: 0;
   border: none;
   background: transparent;
-  padding: 0 12px 16px;
+  padding: 0;
   width: 100%;
   border-bottom: 1px solid var(--border-subtle);
+  position: relative;
 }
 
 .diff-viewer-item.active {
   border-color: var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-active) 35%, transparent);
   box-shadow: none;
 }
 
@@ -49,14 +51,16 @@
   gap: 8px;
   font-size: 12px;
   color: var(--text-muted);
-  margin-bottom: 8px;
   position: sticky;
   top: 0;
   z-index: 2;
   background: var(--surface-messages);
-  padding: 6px 12px;
-  margin: 0 -12px 8px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 12px 12px 10px;
+  margin: 0;
   border-bottom: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
 }
 
 .diff-viewer-status {
@@ -66,6 +70,33 @@
   border-radius: 999px;
   border: 1px solid var(--border-stronger);
   color: var(--text-stronger);
+  background: var(--surface-control);
+  text-transform: uppercase;
+}
+
+.diff-viewer-status[data-status="A"] {
+  color: #47d488;
+  border-color: rgba(71, 212, 136, 0.4);
+  background: rgba(71, 212, 136, 0.12);
+}
+
+.diff-viewer-status[data-status="M"] {
+  color: #f5c363;
+  border-color: rgba(245, 195, 99, 0.4);
+  background: rgba(245, 195, 99, 0.12);
+}
+
+.diff-viewer-status[data-status="D"] {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.12);
+}
+
+.diff-viewer-status[data-status="R"],
+.diff-viewer-status[data-status="T"] {
+  color: var(--text-faint);
+  border-color: var(--border-subtle);
+  background: var(--surface-control);
 }
 
 .diff-viewer-path {
@@ -94,12 +125,22 @@
   --diffs-tab-size: 2;
 }
 
+.diff-viewer-output-flat {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
 
 .diff-viewer-output diffs-container {
   display: block;
   max-width: 100%;
   min-width: 0;
   width: 100%;
+}
+
+.diff-viewer-output-flat diffs-container {
+  background: transparent;
 }
 
 .diff-line {

@@ -80,16 +80,18 @@ const DiffCard = memo(function DiffCard({
   }, [entry.diff, entry.path]);
 
   return (
-    <div
-      data-diff-path={entry.path}
-      className={`diff-viewer-item ${isSelected ? "active" : ""}`}
-    >
+      <div
+        data-diff-path={entry.path}
+        className={`diff-viewer-item ${isSelected ? "active" : ""}`}
+      >
       <div className="diff-viewer-header">
-        <span className="diff-viewer-status">{entry.status}</span>
+        <span className="diff-viewer-status" data-status={entry.status}>
+          {entry.status}
+        </span>
         <span className="diff-viewer-path">{entry.path}</span>
       </div>
       {entry.diff.trim().length > 0 && fileDiff ? (
-        <div className="diff-viewer-output">
+        <div className="diff-viewer-output diff-viewer-output-flat">
           <FileDiff
             fileDiff={fileDiff}
             options={diffOptions}
