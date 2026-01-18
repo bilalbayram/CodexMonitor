@@ -8,6 +8,82 @@ import type {
 } from "../../../types";
 import { normalizeItem, prepareThreadItems, upsertItem } from "../../../utils/threadItems";
 
+const MAX_THREAD_NAME_LENGTH = 38;
+
+function formatThreadName(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.length > MAX_THREAD_NAME_LENGTH
+    ? `${trimmed.slice(0, MAX_THREAD_NAME_LENGTH)}…`
+    : trimmed;
+}
+
+function getAssistantTextForRename(
+  items: ConversationItem[],
+  itemId?: string,
+): string {
+  if (itemId) {
+    const match = items.find(
+      (item) =>
+        item.kind === "message" &&
+        item.role === "assistant" &&
+        item.id === itemId,
+    );
+    if (match && match.kind === "message") {
+      return match.text;
+    }
+  }
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item.kind === "message" && item.role === "assistant") {
+      return item.text;
+    }
+  }
+  return "";
+}
+
+function maybeRenameThreadFromAgent({
+  workspaceId,
+  threadId,
+  items,
+  itemId,
+  threadsByWorkspace,
+}: {
+  workspaceId: string;
+  threadId: string;
+  items: ConversationItem[];
+  itemId?: string;
+  threadsByWorkspace: Record<string, ThreadSummary[]>;
+}) {
+  const threads = threadsByWorkspace[workspaceId] ?? [];
+  if (!threads.length) {
+    return threadsByWorkspace;
+  }
+  const hasUserMessage = items.some(
+    (item) => item.kind === "message" && item.role === "user",
+  );
+  if (hasUserMessage) {
+    return threadsByWorkspace;
+  }
+  const nextName = formatThreadName(getAssistantTextForRename(items, itemId));
+  if (!nextName) {
+    return threadsByWorkspace;
+  }
+  let didChange = false;
+  const nextThreads = threads.map((thread) => {
+    if (thread.id !== threadId || thread.name === nextName) {
+      return thread;
+    }
+    didChange = true;
+    return { ...thread, name: nextName };
+  });
+  return didChange
+    ? { ...threadsByWorkspace, [workspaceId]: nextThreads }
+    : threadsByWorkspace;
+}
+
 type ThreadActivityStatus = {
   isProcessing: boolean;
   hasUnread: boolean;
@@ -55,8 +131,20 @@ export type ThreadAction =
     }
   | { type: "addAssistantMessage"; threadId: string; text: string }
   | { type: "setThreadName"; workspaceId: string; threadId: string; name: string }
-  | { type: "appendAgentDelta"; threadId: string; itemId: string; delta: string }
-  | { type: "completeAgentMessage"; threadId: string; itemId: string; text: string }
+  | {
+      type: "appendAgentDelta";
+      workspaceId: string;
+      threadId: string;
+      itemId: string;
+      delta: string;
+    }
+  | {
+      type: "completeAgentMessage";
+      workspaceId: string;
+      threadId: string;
+      itemId: string;
+      text: string;
+    }
   | { type: "upsertItem"; threadId: string; item: ConversationItem }
   | { type: "setThreadItems"; threadId: string; items: ConversationItem[] }
   | {
@@ -433,12 +521,21 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           text: action.delta,
         });
       }
+      const updatedItems = prepareThreadItems(list);
+      const nextThreadsByWorkspace = maybeRenameThreadFromAgent({
+        workspaceId: action.workspaceId,
+        threadId: action.threadId,
+        items: updatedItems,
+        itemId: action.itemId,
+        threadsByWorkspace: state.threadsByWorkspace,
+      });
       return {
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: prepareThreadItems(list),
+          [action.threadId]: updatedItems,
         },
+        threadsByWorkspace: nextThreadsByWorkspace,
       };
     }
     case "completeAgentMessage": {
@@ -458,12 +555,21 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           text: action.text,
         });
       }
+      const updatedItems = prepareThreadItems(list);
+      const nextThreadsByWorkspace = maybeRenameThreadFromAgent({
+        workspaceId: action.workspaceId,
+        threadId: action.threadId,
+        items: updatedItems,
+        itemId: action.itemId,
+        threadsByWorkspace: state.threadsByWorkspace,
+      });
       return {
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: prepareThreadItems(list),
+          [action.threadId]: updatedItems,
         },
+        threadsByWorkspace: nextThreadsByWorkspace,
       };
     }
     case "upsertItem": {
