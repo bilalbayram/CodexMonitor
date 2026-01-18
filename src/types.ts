@@ -160,6 +160,7 @@ export type GitHubPullRequest = {
   title: string;
   url: string;
   updatedAt: string;
+  createdAt: string;
   body: string;
   headRefName: string;
   baseRefName: string;
@@ -176,6 +177,14 @@ export type GitHubPullRequestDiff = {
   path: string;
   status: string;
   diff: string;
+};
+
+export type GitHubPullRequestComment = {
+  id: number;
+  body: string;
+  createdAt: string;
+  url: string;
+  author: GitHubUser | null;
 };
 
 export type TokenUsageBreakdown = {
