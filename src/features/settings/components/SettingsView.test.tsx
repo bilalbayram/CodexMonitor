@@ -1820,4 +1820,51 @@ describe("SettingsView Shortcuts", () => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
   });
+
+  it("filters shortcuts by search query", async () => {
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="shortcuts"
+      />,
+    );
+
+    expect(screen.getByText("Toggle terminal panel")).toBeTruthy();
+    expect(screen.getByText("Cycle model")).toBeTruthy();
+
+    const searchInput = screen.getByLabelText("Search shortcuts");
+    fireEvent.change(searchInput, { target: { value: "terminal" } });
+
+    expect(screen.getByText("Toggle terminal panel")).toBeTruthy();
+    expect(screen.queryByText("Cycle model")).toBeNull();
+
+    fireEvent.change(searchInput, { target: { value: "no-such-shortcut" } });
+    expect(screen.getByText('No shortcuts match "no-such-shortcut".')).toBeTruthy();
+  });
 });
