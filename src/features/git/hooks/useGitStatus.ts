@@ -22,7 +22,42 @@ const emptyStatus: GitStatusState = {
   error: null,
 };
 
-const REFRESH_INTERVAL_MS = 3000;
+const REFRESH_INTERVAL_MS = 5000;
+
+function sameFileStatusLists(a: GitFileStatus[], b: GitFileStatus[]) {
+  if (a === b) {
+    return true;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index];
+    const right = b[index];
+    if (
+      left.path !== right.path
+      || left.status !== right.status
+      || left.additions !== right.additions
+      || left.deletions !== right.deletions
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameStatusState(a: GitStatusState, b: GitStatusState) {
+  return (
+    a.branchName === b.branchName
+    && a.error === b.error
+    && a.totalAdditions === b.totalAdditions
+    && a.totalDeletions === b.totalDeletions
+    && sameFileStatusLists(a.files, b.files)
+    && sameFileStatusLists(a.stagedFiles, b.stagedFiles)
+    && sameFileStatusLists(a.unstagedFiles, b.unstagedFiles)
+  );
+}
+
 export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
   const [status, setStatus] = useState<GitStatusState>(emptyStatus);
   const requestIdRef = useRef(0);
@@ -66,7 +101,7 @@ export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
           branchName: resolvedBranchName,
           error: null,
         };
-        setStatus(nextStatus);
+        setStatus((prev) => (sameStatusState(prev, nextStatus) ? prev : nextStatus));
         cachedStatusRef.current.set(workspaceId, nextStatus);
       })
       .catch((err) => {
@@ -82,7 +117,7 @@ export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
         const nextStatus = cached
           ? { ...cached, error: message }
           : { ...emptyStatus, branchName: "unknown", error: message };
-        setStatus(nextStatus);
+        setStatus((prev) => (sameStatusState(prev, nextStatus) ? prev : nextStatus));
       });
   }, [resolveBranchName, workspaceId]);
 

@@ -41,7 +41,7 @@ describe("useGitStatus", () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it("polls on interval and updates status", async () => {
@@ -63,7 +63,7 @@ describe("useGitStatus", () => {
     expect(result.current.status.totalAdditions).toBe(2);
 
     await act(async () => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(5000);
     });
     await act(async () => {
       await Promise.resolve();
